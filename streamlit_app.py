@@ -1,34 +1,40 @@
-from flask import Flask, request, jsonify
+import streamlit as st
 import pandas as pd
 import tensorflow as tf
 import pickle
 
-app = Flask(__name__)
-
+# Load model and preprocessor
 model = tf.keras.models.load_model("model.keras")
 
 with open("preprocessor.pkl", "rb") as f:
     preprocessor = pickle.load(f)
 
-@app.route("/")
-def home():
-    return "Azure Cost Prediction API is Running"
+st.set_page_config(page_title="Azure Cost Prediction", page_icon="💰")
 
-@app.route("/predict", methods=["POST"])
-def predict():
-    try:
-        data = request.get_json()
-        df = pd.DataFrame([data])
-        df["UsageDate"] = pd.to_datetime(df["UsageDate"])
-        df["Year"] = df["UsageDate"].dt.year
-        df["Month"] = df["UsageDate"].dt.month
-        df["Day"] = df["UsageDate"].dt.day
-        df.drop("UsageDate", axis=1, inplace=True)
-        processed_data = preprocessor.transform(df)
-        prediction = model.predict(processed_data)
-        return jsonify({"Predicted Cost": float(prediction[0][0])})
-    except Exception as e:
-        return jsonify({"Error": str(e)})
+st.title("💰 Azure Cost Prediction")
 
-if __name__ == "__main__":
-    app.run(debug=True)
+service_name = st.text_input("Service Name")
+cost_usd = st.number_input("Cost USD", min_value=0.0, step=0.01)
+currency = st.selectbox("Currency", ["USD"])
+usage_date = st.date_input("Usage Date")
+
+if st.button("Predict"):
+
+    df = pd.DataFrame({
+        "ServiceName": [service_name],
+        "CostUSD": [cost_usd],
+        "Currency": [currency],
+        "UsageDate": [usage_date]
+    })
+
+    df["UsageDate"] = pd.to_datetime(df["UsageDate"])
+    df["Year"] = df["UsageDate"].dt.year
+    df["Month"] = df["UsageDate"].dt.month
+    df["Day"] = df["UsageDate"].dt.day
+    df.drop("UsageDate", axis=1, inplace=True)
+
+    processed = preprocessor.transform(df)
+
+    prediction = model.predict(processed, verbose=0)
+
+    st.success(f"Predicted Cost: {prediction[0][0]:.2f}")
